@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>AI Purchasing Agent</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<style>
+  :root {
+    --bg: #0f1115; --panel: #171a21; --panel2: #1e222b; --border: #2a2f3a;
+    --text: #e7e9ee; --muted: #9aa3b2; --accent: #ff5a4e; --accent2: #4ea1ff;
+    --green: #35c46a; --amber: #e6b800; --red: #ff5a5a;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background: var(--bg); color: var(--text); }
+  header { padding: 20px 28px; border-bottom: 1px solid var(--border); display:flex; align-items:center; justify-content:space-between; }
+  header h1 { font-size: 18px; margin:0; letter-spacing: 0.2px; }
+  header .mode { font-size: 12px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); }
+  main { display:grid; grid-template-columns: 380px 1fr; gap: 20px; padding: 20px 28px; }
+  .panel { background: var(--panel); border:1px solid var(--border); border-radius: 12px; padding: 16px; }
+  .panel h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 0 0 12px; }
+  table { width:100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align:left; padding: 6px 4px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 500; }
+  select, input, button { background: var(--panel2); color: var(--text); border:1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 13px; width: 100%; }
+  button { background: var(--accent); border:none; color: white; font-weight:600; cursor:pointer; margin-top: 10px; }
+  button:hover { opacity: 0.9; }
+  button.secondary { background: var(--panel2); color: var(--text); border:1px solid var(--border); font-weight:500; }
+  label { font-size: 12px; color: var(--muted); display:block; margin: 10px 0 4px; }
+  .badge { display:inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight:600; }
+  .badge.accept { background: rgba(53,196,106,0.15); color: var(--green); }
+  .badge.modify { background: rgba(230,184,0,0.15); color: var(--amber); }
+  .badge.reject { background: rgba(255,90,90,0.15); color: var(--red); }
+  .badge.investigate, .badge.escalate { background: rgba(78,161,255,0.15); color: var(--accent2); }
+  .badge.topup_alt_supplier { background: rgba(78,161,255,0.15); color: var(--accent2); }
+  .badge.sufficient_inventory { background: rgba(53,196,106,0.15); color: var(--green); }
+  .result-card { padding: 14px; border-radius: 10px; background: var(--panel2); border:1px solid var(--border); margin-bottom: 14px; }
+  .kf { font-size: 13px; color: var(--muted); margin: 3px 0; padding-left: 14px; position:relative; }
+  .kf:before { content:"—"; position:absolute; left:0; }
+  .trace { max-height: 480px; overflow-y:auto; }
+  .step { border:1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; background: var(--panel); }
+  .step .tag { font-size: 10px; text-transform:uppercase; letter-spacing: 0.06em; padding: 2px 8px; border-radius: 6px; margin-right: 8px; }
+  .tag.investigate { background: rgba(78,161,255,0.15); color: var(--accent2); }
+  .tag.decide { background: rgba(230,184,0,0.15); color: var(--amber); }
+  .tag.act { background: rgba(53,196,106,0.15); color: var(--green); }
+  .tag.validate, .tag.revalidate { background: rgba(255,90,90,0.15); color: var(--red); }
+  .tag.self_correct, .tag.attempt_start, .tag.final_escalation, .tag.llm_error_fallback { background: rgba(255,255,255,0.08); color: var(--muted); }
+  pre { white-space: pre-wrap; word-break: break-word; font-size: 12px; color: var(--muted); margin: 6px 0 0; }
+  .tabs { display:flex; gap: 6px; margin-bottom: 14px; }
+  .tabs button { width:auto; margin:0; padding: 6px 14px; font-size: 12px; }
+  .hidden { display:none; }
+  .empty { color: var(--muted); font-size: 13px; padding: 30px 0; text-align:center; }
+  .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🛒 AI Purchasing Agent</h1>
+  <span class="mode" id="modeLabel">checking reasoning mode…</span>
+</header>
+
+<main>
+  <div>
+    <div class="panel">
+      <h2>Run the agent</h2>
+      <div class="tabs">
+        <button id="tabS1" class="secondary">Scenario 1: Recommendation Review</button>
+        <button id="tabS2" class="secondary">Scenario 2: Supplier Shortfall</button>
+      </div>
+
+      <div id="s1Form">
+        <label>Product</label>
+        <select id="productSelect"></select>
+        <label>System-recommended quantity</label>
+        <input id="qtyInput" type="number" value="800" />
+        <button onclick="runScenario1()">Run Agent</button>
+      </div>
+
+      <div id="s2Form" class="hidden">
+        <label>Open Purchase Order</label>
+        <select id="poSelect"></select>
+        <label>Quantity supplier can actually fulfil</label>
+        <input id="fulfilledInput" type="number" value="250" />
+        <button onclick="runScenario2()">Run Agent</button>
+      </div>
+
+      <button class="secondary" onclick="resetData()">↺ Reset mock data</button>
+    </div>
+
+    <div class="panel" style="margin-top:16px;">
+      <h2>Products</h2>
+      <table id="productsTable"><thead><tr><th>SKU</th><th>On hand</th><th>Demand/d</th></tr></thead><tbody></tbody></table>
+    </div>
+
+    <div class="panel" style="margin-top:16px;">
+      <div class="grid2">
+        <div><h2>Budget</h2><div id="budgetBox" style="font-size:13px;color:var(--muted)">—</div></div>
+        <div><h2>Storage</h2><div id="storageBox" style="font-size:13px;color:var(--muted)">—</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="panel">
+      <h2>Decision</h2>
+      <div id="decisionArea"><div class="empty">Run the agent to see its decision here.</div></div>
+    </div>
+
+    <div class="panel" style="margin-top:16px;">
+      <h2>Agent trace (investigate → decide → act → validate)</h2>
+      <div id="traceArea" class="trace"><div class="empty">No run yet.</div></div>
+    </div>
+  </div>
+</main>
+
+<script>
+const API = "";
+
+async function api(path, opts) {
+  const res = await fetch(API + path, opts);
+  return res.json();
+}
+
+async function loadHealth() {
+  const h = await api("/api/health");
+  document.getElementById("modeLabel").textContent =
+    h.reasoning_mode === "llm" ? "🤖 LLM tool-use mode (Claude)" : "⚙️ Rule-based mode (no API key set)";
+}
+
+async function loadProducts() {
+  const products = await api("/api/data/products");
+  const sel = document.getElementById("productSelect");
+  sel.innerHTML = products.map(p => `<option value="${p.id}">${p.sku} — ${p.name}</option>`).join("");
+  const tbody = document.querySelector("#productsTable tbody");
+  tbody.innerHTML = products.map(p =>
+    `<tr><td>${p.sku}</td><td>${p.on_hand_qty}</td><td>${p.daily_avg_demand} (recent ${p.recent_daily_actual}${p.volatility!=="normal" ? " ⚠️":""})</td></tr>`
+  ).join("");
+}
+
+async function loadPOs() {
+  const pos = await api("/api/data/purchase_orders");
+  const open = pos.filter(p => ["open","pending_review"].includes(p.status));
+  const sel = document.getElementById("poSelect");
+  sel.innerHTML = open.map(p => `<option value="${p.id}">PO #${p.id} — product ${p.product_id} — qty ${p.qty} (${p.status})</option>`).join("");
+}
+
+async function loadBudgetStorage() {
+  const b = await api("/api/data/budget");
+  document.getElementById("budgetBox").innerHTML =
+    `Total ₹${b.total_budget} · Spent ₹${b.spent} · <b style="color:var(--text)">Remaining ₹${b.remaining}</b>`;
+  const s = await api("/api/data/storage?node=DEL-DC1");
+  document.getElementById("storageBox").innerHTML =
+    `Total ${s.total_capacity_m3} m³ · Used ${s.used_capacity_m3} m³ · <b style="color:var(--text)">Free ${s.free_capacity_m3} m³</b>`;
+}
+
+async function refreshAll() {
+  await Promise.all([loadProducts(), loadPOs(), loadBudgetStorage()]);
+}
+
+async function resetData() {
+  await api("/api/data/reset", { method: "POST" });
+  await refreshAll();
+  document.getElementById("decisionArea").innerHTML = `<div class="empty">Data reset. Run the agent again.</div>`;
+  document.getElementById("traceArea").innerHTML = `<div class="empty">No run yet.</div>`;
+}
+
+function renderDecision(body, kind) {
+  const decision = body.decision || "escalate";
+  const qty = body.final_qty ?? body.action?.qty ?? "—";
+  const valid = body.validation ? body.validation.valid : true;
+  const factors = body.key_factors || [];
+  document.getElementById("decisionArea").innerHTML = `
+    <div class="result-card">
+      <span class="badge ${decision}">${decision.toUpperCase()}</span>
+      ${qty !== "—" ? `<span style="margin-left:10px;color:var(--muted)">qty: <b style="color:var(--text)">${qty}</b></span>` : ""}
+      ${body.po_id ? `<span style="margin-left:10px;color:var(--muted)">PO #${body.po_id}</span>` : ""}
+      <div style="margin-top:8px;">${body.reasoning || ""}</div>
+      ${factors.length ? `<div style="margin-top:10px;">${factors.map(f=>`<div class="kf">${f}</div>`).join("")}</div>` : ""}
+      <div style="margin-top:10px;font-size:12px;color:${valid ? "var(--green)" : "var(--red)"}">
+        ${valid ? "✓ Independent validation passed" : "✗ Validation failed — agent self-corrected/escalated"}
+      </div>
+      ${body.attempts ? `<div style="font-size:11px;color:var(--muted);margin-top:4px;">Attempts: ${body.attempts} · Mode: ${body.reasoning_mode}</div>` : ""}
+    </div>`;
+}
+
+function renderTrace(trace) {
+  if (!trace || !trace.length) {
+    document.getElementById("traceArea").innerHTML = `<div class="empty">No trace.</div>`;
+    return;
+  }
+  document.getElementById("traceArea").innerHTML = trace.map(step => {
+    const tag = step.step || "step";
+    let body = "";
+    if (step.tool) body += `<b>${step.tool}</b>`;
+    if (step.reasoning) body += `<div style="margin-top:4px;">${step.reasoning}</div>`;
+    if (step.result !== undefined) body += `<pre>${JSON.stringify(step.result, null, 2)}</pre>`;
+    else if (step.decision !== undefined && !step.tool) body += `<pre>${JSON.stringify(step, null, 2)}</pre>`;
+    else if (Object.keys(step).length > 1 && !step.tool && !step.reasoning) body += `<pre>${JSON.stringify(step, null, 2)}</pre>`;
+    return `<div class="step"><span class="tag ${tag}">${tag.replace("_"," ")}</span>${body}</div>`;
+  }).join("");
+}
+
+async function runScenario1() {
+  const product_id = parseInt(document.getElementById("productSelect").value);
+  const recommended_qty = parseInt(document.getElementById("qtyInput").value);
+  document.getElementById("decisionArea").innerHTML = `<div class="empty">Running agent…</div>`;
+  const body = await api("/api/agent/recommendation-review", {
+    method: "POST", headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({ product_id, recommended_qty })
+  });
+  renderDecision(body, "s1");
+  renderTrace(body.trace);
+  await refreshAll();
+}
+
+async function runScenario2() {
+  const po_id = parseInt(document.getElementById("poSelect").value);
+  const fulfilled_qty = parseInt(document.getElementById("fulfilledInput").value);
+  document.getElementById("decisionArea").innerHTML = `<div class="empty">Running agent…</div>`;
+  const body = await api("/api/agent/supplier-shortfall", {
+    method: "POST", headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({ po_id, fulfilled_qty })
+  });
+  renderDecision(body, "s2");
+  renderTrace(body.trace);
+  await refreshAll();
+}
+
+document.getElementById("tabS1").onclick = () => {
+  document.getElementById("s1Form").classList.remove("hidden");
+  document.getElementById("s2Form").classList.add("hidden");
+};
+document.getElementById("tabS2").onclick = () => {
+  document.getElementById("s2Form").classList.remove("hidden");
+  document.getElementById("s1Form").classList.add("hidden");
+  loadPOs();
+};
+
+loadHealth();
+refreshAll();
+</script>
+</body>
+</html>
